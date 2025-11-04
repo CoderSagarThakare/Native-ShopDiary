@@ -3,11 +3,11 @@ import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { CommonActions } from '@react-navigation/native';
 import EncryptedStorage from 'react-native-encrypted-storage';
-
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './navigation/app-navigator';
 
 export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(null); // null = loading
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
 
   useEffect(() => {
     EncryptedStorage.getItem('user_token').then((token) => {
@@ -16,15 +16,17 @@ export default function App() {
   }, []);
 
   if (isLoggedIn === null) {
-    return null; // Splash screen (add later)
+    return null; // Splash screen (will add later)
   }
 
   return (
-    <NavigationContainer>
-      <AppNavigator
-        isLoggedIn={isLoggedIn}
-        onAuthChange={setIsLoggedIn}
-      />
-    </NavigationContainer>
+    <SafeAreaProvider>
+      <NavigationContainer>
+        <AppNavigator
+          isLoggedIn={isLoggedIn}
+          onAuthChange={setIsLoggedIn}
+        />
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 }

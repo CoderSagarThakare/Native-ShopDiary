@@ -1,10 +1,11 @@
 // src/screens/home-screen.js
 import React from 'react';
-import { SafeAreaView, View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { useDiaryStore } from '../store/diary-store';
 import StatCard from '../components/stat-card';
 import CommonButton from '../components/common-button';
 import EncryptedStorage from 'react-native-encrypted-storage';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function HomeScreen({ navigation, onLogout }) {
   const { todaySales, todayBuys, syncPending } = useDiaryStore();

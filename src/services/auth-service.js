@@ -29,7 +29,7 @@ export const registerShop = async (shopName, email, password) => {
         const msg = error.response?.data?.message || 'Registration failed';
         Alert.alert('Error', msg);
         console.log('Server error:', msg);
-        return false;
+        throw error;
     }
 };
 

@@ -1,17 +1,17 @@
 // src/screens/register-screen.js
 import React, { useState, useCallback } from 'react';
-import { SafeAreaView, Text, StyleSheet, View } from 'react-native';
+import { Text, StyleSheet, View } from 'react-native';
 import InputField from '../components/input-field';
 import CommonButton from '../components/common-button';
 import LoadingSpinner from '../components/loading-spinner';
 import { registerShop } from '../services/auth-service';
 import { validateEmail, validatePassword } from '../utils/validation';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const INITIAL_ERRORS = {
     email: '',
     shopName: '',
     password: '',
-    general: '',
 };
 
 export default function RegisterScreen({ navigation, onAuth }) {
@@ -55,7 +55,6 @@ export default function RegisterScreen({ navigation, onAuth }) {
         if (!validate()) return;
 
         setLoading(true);
-        setErrors((prev) => ({ ...prev, general: '' }));
 
         try {
             await registerShop(
@@ -66,7 +65,6 @@ export default function RegisterScreen({ navigation, onAuth }) {
             onAuth(true);
         } catch (err) {
             const msg = err.response?.data?.message || 'Registration failed';
-            setErrors((prev) => ({ ...prev, general: msg }));
         } finally {
             setLoading(false);
         }
@@ -102,10 +100,6 @@ export default function RegisterScreen({ navigation, onAuth }) {
                     secureTextEntry
                     error={errors.password}
                 />
-
-                {errors.general ? (
-                    <Text style={styles.error}>{errors.general}</Text>
-                ) : null}
 
                 <CommonButton title="Register Shop" onPress={handleRegister} />
             </View>
