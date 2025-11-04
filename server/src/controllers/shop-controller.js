@@ -10,3 +10,4 @@ export const register = async (req, res) => {
     res.status(status).json({ message: err.message });
   }
 };
+

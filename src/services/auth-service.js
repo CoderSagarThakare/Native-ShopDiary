@@ -5,7 +5,7 @@ import { Alert } from 'react-native';
 
 export const registerShop = async (shopName, email, password) => {
     try {
-        const res = await api.post('/shops/register', {
+        const res = await api.post('/auth/register', {
             shopName: shopName.trim(),
             password,
             email
@@ -33,10 +33,14 @@ export const registerShop = async (shopName, email, password) => {
     }
 };
 
-export const loginShop = async (shopName, password) => {
-    const res = await api.post('/shops/login', { shopName, password });
+export const loginShop = async (email, password) => {
+  try {
+    const res = await api.post('/auth/login', { email, password });
     await EncryptedStorage.setItem('user_token', res.data.token);
     return res.data;
+  } catch (err) {
+    throw err;
+  }
 };
 
 export const logout = async () => {
