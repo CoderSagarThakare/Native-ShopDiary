@@ -1,11 +1,12 @@
-// src/screens/add-buy-screen.js
+// src/screens/reports-screen.js
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
-export default function AddBuyScreen() {
+export default function ReportsScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Add Buy (Next)</Text>
+      <Text style={styles.title}>Reports</Text>
+      <Text>Coming soon: Daily, Weekly, Profit Trends</Text>
     </View>
   );
 }
@@ -15,12 +16,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
     padding: 20,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1a5d1a',
-  },
+  title: { fontSize: 28, fontWeight: 'bold', color: '#1a5d1a' },
 });
