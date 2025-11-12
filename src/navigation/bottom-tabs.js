@@ -15,9 +15,12 @@ export default function BottomTabs({ onLogout }) {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#1a5d1a',
-        tabBarInactiveTintColor: '#666',
+        tabBarActiveTintColor: '#227b22ff',
+        tabBarInactiveTintColor: '#8f8e8eff',
         tabBarStyle: { paddingBottom: 5, height: 60 },
+        tabBarLabelStyle: {
+          fontWeight: '600',
+        },
       }}
     >
       <Tab.Screen
