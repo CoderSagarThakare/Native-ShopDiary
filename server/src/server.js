@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import connectDB from './config/db.js';
 import authRoutes from './routes/auth-routes.js';
 import shopRoutes from './routes/shop-routes.js';
+import entriesRoutes from './routes/entry-routes.js';
 
 dotenv.config();
 connectDB();
@@ -16,9 +17,9 @@ app.use(cors());
 app.use(morgan('dev'));
 app.use(express.json());
 
-
 app.use('/api/auth', authRoutes);
 app.use('/api/shops', shopRoutes);
+app.use('/api/entries', entriesRoutes);
 
 
 const PORT = process.env.PORT || 5000;

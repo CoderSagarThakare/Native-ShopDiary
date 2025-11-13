@@ -1,9 +1,21 @@
 // server/controllers/entryController.js
-const Entry = require('../models/Entry');
+import {Entry} from  "../models/entry-model.js";
 
-exports.addEntry = async (req, res) => {
+export const addEntry = async (req, res) => {
   try {
-    const entry = new Entry({ ...req.body, userId: req.user.id });
+    const { item, price, qty, unit, type } = req.body;
+    const total = price * qty;
+
+    const entry = new Entry({
+      userId: req.user.id,
+      type, // 'buy' or 'sale'
+      item,
+      price,
+      qty,
+      total,
+      unit,
+    });
+
     await entry.save();
     res.status(201).json(entry);
   } catch (err) {
@@ -11,7 +23,7 @@ exports.addEntry = async (req, res) => {
   }
 };
 
-exports.getEntries = async (req, res) => {
+export const getEntries = async (req, res) => {
   try {
     const { type, date } = req.query;
     const filter = { userId: req.user.id };

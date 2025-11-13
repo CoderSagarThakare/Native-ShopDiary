@@ -12,6 +12,7 @@ import {
 import { Picker } from '@react-native-picker/picker';
 import EncryptedStorage from 'react-native-encrypted-storage';
 import { useDiaryStore } from '../store/diary-store';
+import api from '../services/api-service';
 
 const COMMON_ITEMS = [
   { label: 'Milk', value: 'milk', unit: 'L', price: 50 },
@@ -49,43 +50,80 @@ export default function AddScreen() {
       const key = type === 'buy' ? 'TODAY_BUYS' : 'TODAY_SALES';
       await EncryptedStorage.setItem(key, JSON.stringify(newEntries));
       setEntries(newEntries);
-      addToQueue(); // Offline sync
     } catch (e) {
-      Alert.alert('Error', 'Failed to save');
+      console.log('Local save failed', e);
     }
   };
 
-  const addOrUpdateEntry = () => {
+  useEffect(() => {
+    loadFromBackend();
+  }, [type]);
+
+  const loadFromBackend = async () => {
+    try {
+      const response = await api.get('/entries', {
+        params: { type, date: new Date().toISOString().split('T')[0] },
+      });
+      setEntries(response.data);
+    } catch (error) {
+      // Fallback to local
+      loadEntries();
+    }
+  };
+
+  const addOrUpdateEntry = async () => {
     if (!item || !price || qty <= 0) {
-      Alert.alert('Error', 'Fill all fields');
+      Alert.alert('Error', 'Please fill all fields');
       return;
     }
 
-    const total = parseFloat(price) * qty;
-    const newEntry = {
-      id: Date.now().toString(),
+    const priceNum = parseFloat(price);
+    const total = priceNum * qty;
+
+    const entryData = {
       item,
-      price: parseFloat(price),
+      price: priceNum,
       qty,
       total,
       unit: getUnit(item),
+      type, // 'buy' or 'sale'
     };
 
-    const existing = entries.find(e => e.item === item);
-    let updated;
+    try {
+      // 1. SEND TO BACKEND
+      const response = await api.post('/entries', entryData);
+      console.log('API Response:', response.data);
+      const savedEntry = response.data;
 
-    if (existing) {
-      updated = entries.map(e =>
-        e.item === item
-          ? { ...e, qty: e.qty + qty, total: e.total + total }
-          : e,
+      // 2. UPDATE LOCAL STATE
+      const existing = entries.find(e => e.item === item);
+      let updated;
+
+      if (existing) {
+        updated = entries.map(e =>
+          e.item === item
+            ? { ...e, qty: e.qty + qty, total: e.total + total }
+            : e,
+        );
+      } else {
+        updated = [...entries, { ...savedEntry, id: savedEntry._id }];
+      }
+
+      // 3. SAVE LOCALLY
+      await saveEntries(updated);
+      resetForm();
+
+      Alert.alert('Success', `${item} saved!`);
+    } catch (error) {
+      console.log('API Error:', error.message);
+      Alert.alert(
+        'Failed',
+        error.message.includes('internet')
+          ? 'No internet. Please check connection and try again.'
+          : 'Server error. Try again later.',
+        [{ text: 'Retry', onPress: addOrUpdateEntry }],
       );
-    } else {
-      updated = [...entries, newEntry];
     }
-
-    saveEntries(updated);
-    resetForm();
   };
 
   const incrementQty = id => {
@@ -126,25 +164,32 @@ export default function AddScreen() {
       </View>
 
       <View style={styles.form}>
-        <Picker
-          selectedValue={item}
-          onValueChange={setItem}
-          style={styles.picker}
-        >
-          <Picker.Item label="Select Item" value="" />
-          {COMMON_ITEMS.map(i => (
-            <Picker.Item key={i.value} label={i.label} value={i.label} />
-          ))}
-        </Picker>
+        {/* PICKER */}
+        <View style={styles.picker}>
+          <Picker
+            selectedValue={item}
+            onValueChange={setItem}
+            style={{ color: '#333' }}
+            dropdownIconColor="#227b22"
+          >
+            <Picker.Item label="Select or type item..." value="" />
+            {COMMON_ITEMS.map(i => (
+              <Picker.Item key={i.value} label={i.label} value={i.label} />
+            ))}
+          </Picker>
+        </View>
 
+        {/* PRICE + QTY ROW */}
         <View style={styles.row}>
           <TextInput
             style={styles.input}
-            placeholder="Price per unit"
+            placeholder="Price per unit (₹)"
+            placeholderTextColor="#999"
             value={price}
             onChangeText={setPrice}
             keyboardType="numeric"
           />
+
           <View style={styles.qtyRow}>
             <TouchableOpacity onPress={() => setQty(Math.max(1, qty - 1))}>
               <Text style={styles.qtyBtn}>−</Text>
@@ -156,8 +201,9 @@ export default function AddScreen() {
           </View>
         </View>
 
+        {/* SAVE BUTTON */}
         <TouchableOpacity style={styles.saveBtn} onPress={addOrUpdateEntry}>
-          <Text style={styles.saveText}>SAVE</Text>
+          <Text style={styles.saveText}>SAVE ENTRY</Text>
         </TouchableOpacity>
       </View>
 
@@ -194,36 +240,77 @@ const styles = StyleSheet.create({
   activeTab: { backgroundColor: '#227b22', borderRadius: 8 },
   tabText: { color: '#fff', fontWeight: '600' },
   form: {
-    backgroundColor: '#1a1a1a',
-    padding: 16,
+    backgroundColor: '#ffffff', // White card
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 20,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+  },
+  picker: {
+    backgroundColor: '#f5f5f5',
     borderRadius: 12,
     marginBottom: 16,
-    elevation: 2,
+    paddingHorizontal: 12,
+    height: 56,
+    justifyContent: 'center',
   },
-  picker: { height: 50, marginBottom: 12 },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    alignItems: 'center',
+    marginBottom: 16,
   },
   input: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    marginRight: 8,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    marginRight: 12,
+    color: '#333',
   },
-  qtyRow: { flexDirection: 'row', alignItems: 'center' },
-  qtyBtn: { fontSize: 24, width: 40, textAlign: 'center', color: '#227b22' },
-  qty: { width: 40, textAlign: 'center', fontSize: 18 },
+  qtyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    height: 50,
+  },
+  qtyBtn: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#227b22',
+    width: 44,
+    textAlign: 'center',
+    paddingBottom: 4,
+  },
+  qty: {
+    width: 50,
+    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
   saveBtn: {
     backgroundColor: '#227b22',
-    padding: 16,
-    borderRadius: 12,
+    paddingVertical: 16,
+    borderRadius: 14,
     alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 3,
   },
-  saveText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  saveText: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 17,
+    letterSpacing: 0.5,
+  },
   listHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',

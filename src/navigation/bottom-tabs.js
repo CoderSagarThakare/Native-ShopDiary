@@ -35,6 +35,7 @@ export default function BottomTabNavigator({ onLogout }) {
         tabBarStyle: { paddingBottom: 5, height: 60, backgroundColor: '#fff' },
         tabBarLabelStyle: { fontWeight: '600', fontSize: 12 },
       }}
+      initialRouteName='Add'
     >
       <Tab.Screen
         name="Home"

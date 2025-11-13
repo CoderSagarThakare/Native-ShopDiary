@@ -1,11 +1,11 @@
 // server/routes/entryRoutes.js
-const express = require('express');
-const { addEntry, getEntries } = require('../controllers/entryController');
-const auth = require('../middleware/auth');
+import express from 'express';
+import { addEntry ,getEntries} from '../controllers/entry-controller.js';
+import auth from '../middleware/auth-middleware.js'
 
 const router = express.Router();
 
 router.post('/', auth, addEntry);
 router.get('/', auth, getEntries);
 
-module.exports = router;
+export default router;

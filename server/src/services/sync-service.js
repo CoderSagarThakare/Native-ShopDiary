@@ -1,5 +1,5 @@
 // server/services/syncService.js
-const Entry = require('../models/Entry');
+const Entry = require('../models/entry-model');
 
 exports.syncOfflineEntries = async (userId, offlineEntries) => {
   const results = [];

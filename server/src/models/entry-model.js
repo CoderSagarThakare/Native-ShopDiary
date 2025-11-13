@@ -1,5 +1,5 @@
 // server/models/Entry.js
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const entrySchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -12,4 +12,6 @@ const entrySchema = new mongoose.Schema({
   date: { type: Date, default: Date.now },
 });
 
-module.exports = mongoose.model('Entry', entrySchema);
+const Entry = mongoose.model('Entry', entrySchema);
+
+export { Entry };

@@ -5,7 +5,6 @@ import { CommonActions } from '@react-navigation/native';
 import EncryptedStorage from 'react-native-encrypted-storage';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './navigation/app-navigator';
-
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
 
@@ -14,6 +13,7 @@ export default function App() {
       setIsLoggedIn(!!token);
     });
   }, []);
+
 
   if (isLoggedIn === null) {
     return null; // Splash screen (will add later)
