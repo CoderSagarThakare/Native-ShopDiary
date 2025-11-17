@@ -43,8 +43,6 @@ export const registerUser = async ({ shopName, email, password }) => {
 
 export const loginUser = async ({ email, password }) => {
 
-    console.log("in login service");
-    
     const user = await User.findOne({ email }).populate('shop');
     if (!user) throw new Error('Invalid email or password');
 

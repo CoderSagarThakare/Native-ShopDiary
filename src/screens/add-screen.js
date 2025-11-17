@@ -1,3 +1,4 @@
+/* eslint-disable react-native/no-inline-styles */
 // src/screens/add-screen.js (UPDATED)
 import React, { useState, useEffect } from 'react';
 import {
@@ -12,9 +13,13 @@ import {
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import EncryptedStorage from 'react-native-encrypted-storage';
-import { useDiaryStore } from '../store/diary-store';
 import api from '../services/api-service';
 import API from '../constants/api.js';
+import { SwipeListView } from 'react-native-swipe-list-view';
+import { loadEntriesFromServer } from '../services/entry-service';
+import { loadUserItems } from '../services/item-service';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+
 
 export default function AddScreen() {
   const [type, setType] = useState('buy');
@@ -28,26 +33,55 @@ export default function AddScreen() {
   const [newItemUnit, setNewItemUnit] = useState('');
   const [defaultPrice, setDefaultPrice] = useState('');
 
-  // Load entries + user items
-  useEffect(() => {
+  const loadEntryAndItems = async () => {
     loadEntries();
-    loadUserItems();
+    setUserItems(await loadUserItems());
+  };
+  useEffect(() => {
+    loadEntryAndItems();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type]);
 
   const loadEntries = async () => {
-    const key = type === 'buy' ? 'TODAY_BUYS' : 'TODAY_SALES';
-    const data = await EncryptedStorage.getItem(key);
-    setEntries(data ? JSON.parse(data) : []);
-  };
-
-  const loadUserItems = async () => {
     try {
-      const res = await api.get(API.ITEM.GET_ITEMS_LIST);
-      setUserItems(res.data);
+      const key = type === 'buy' ? 'TODAY_BUYS' : 'TODAY_SALES';
+
+      const serverEntries = await loadEntriesFromServer(type);
+
+      await EncryptedStorage.setItem(key, JSON.stringify(serverEntries));
+      setEntries(serverEntries);
     } catch (err) {
-      console.log('Failed to load items');
+      console.log('Failed to load from Entries server', err);
     }
   };
+
+  // const loadEntriesFromServer = async () => {
+  //   try {
+  //     const res = await api.get('/entries', { params: { type } });
+  //     const serverEntries = res.data.map(e => ({
+  //       id: e._id,
+  //       item: e.item,
+  //       price: e.price,
+  //       qty: e.qty,
+  //       total: e.total,
+  //       unit: e.unit,
+  //     }));
+  //     setEntries(serverEntries);
+  //     await saveEntries(serverEntries);
+  //   } catch (err) {
+  //     console.log('Failed to load entries from server', err);
+  //   }
+  // };
+
+  // const loadUserItems = async () => {
+  //   try {
+  //     const res = await api.get(API.ITEM.GET_ITEMS_LIST);
+  //     console.log('User items loaded', res.data);
+  //     setUserItems(res.data);
+  //   } catch (err) {
+  //     console.log('Failed to load items');
+  //   }
+  // };
 
   const saveEntries = async newEntries => {
     const key = type === 'buy' ? 'TODAY_BUYS' : 'TODAY_SALES';
@@ -93,8 +127,7 @@ export default function AddScreen() {
   };
 
   const addNewItem = async () => {
-
-    if (!newItemName || !newItemUnit || !defaultPrice){
+    if (!newItemName || !newItemUnit || !defaultPrice) {
       return Alert.alert('Error', 'All fields are mandatory');
     }
 
@@ -123,7 +156,7 @@ export default function AddScreen() {
       // setShowAddItem(false);
       setNewItemName('');
       setNewItemUnit('');
-      setDefaultPrice('')
+      setDefaultPrice('');
       Alert.alert('Success', `${newItemName} added to your items!`);
     } catch (err) {
       Alert.alert('Failed', 'Try again');
@@ -131,9 +164,7 @@ export default function AddScreen() {
   };
 
   const getUnit = name => {
-    const found = [...userItems].find(
-      i => i.label === name || i.name === name,
-    );
+    const found = [...userItems].find(i => i.label === name || i.name === name);
     return found?.unit || 'unit';
   };
 
@@ -141,6 +172,18 @@ export default function AddScreen() {
     setItem('');
     setPrice('');
     setQty(1);
+  };
+
+  const deleteEntry = async id => {
+    try {
+      await api.delete(`${API.ENTRY.ENTRY}/${id}`);
+
+      const updated = entries.filter(e => e._id !== id);
+      await saveEntries(updated);
+      Alert.alert('Deleted', 'Entry removed');
+    } catch (err) {
+      console.log('Failed to delete from server', err);
+    }
   };
 
   const allItems = [...userItems.map(i => ({ label: i.name, value: i.name }))];
@@ -182,7 +225,7 @@ export default function AddScreen() {
                 setQty('1');
               }
             }}
-            style={{ color: '#333' , minWidth: '100%'}}
+            style={{ color: '#333', minWidth: '100%' }}
           >
             <Picker.Item label="Select item..." value="" />
             <Picker.Item label="+ Add New Item" value="ADD_NEW" />
@@ -276,17 +319,20 @@ export default function AddScreen() {
       </View>
 
       {/* List */}
-      <FlatList
+      <SwipeListView
         data={entries}
-        keyExtractor={i => i.id}
         renderItem={({ item }) => (
           <View style={styles.listItem}>
-            <Text style={styles.itemName}>{item.item}</Text>
-            <Text style={styles.itemDetail}>
-              {item.qty}
-              {getUnit(item.item)} × ₹{item.price} = ₹{item.total}
-            </Text>
+            <View style={styles.itemInfo}>
+              <Text style={styles.itemName}>{item.item}</Text>
+              <Text style={styles.itemDetail}>
+                {item.qty}
+                {getUnit(item.item)} × ₹{item.price} = ₹{item.total}
+              </Text>
+            </View>
+
             <TouchableOpacity
+              style={styles.plusButton}
               onPress={() => {
                 const updated = entries.map(e =>
                   e.id === item.id
@@ -300,12 +346,57 @@ export default function AddScreen() {
             </TouchableOpacity>
           </View>
         )}
+        renderHiddenItem={({ item }) => (
+          <View style={styles.rowBack}>
+            <TouchableOpacity
+              style={styles.deleteBtn}
+              onPress={() => deleteEntry(item._id)}
+            >
+              <Text style={styles.deleteText}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        rightOpenValue={-75}
+        disableRightSwipe={true}
+        keyExtractor={item => item._id}
+        contentContainerStyle={styles.listContainer}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            {/* Real basket / shopping bag icon */}
+            <MaterialIcons
+              name={type === 'buy' ? 'shopping-basket' : 'point-of-sale'}
+              size={90}
+              color="#dc7272ff"
+              style={{ marginBottom: 24, opacity: 0.8 }}
+            />
+
+            <Text style={styles.emptyTitle}>
+              {type === 'buy' ? 'No purchases today' : 'No sales recorded yet'}
+            </Text>
+
+            <Text style={styles.emptySubtitle}>
+              select item & <Text style={styles.highlight}>SAVE ENTRY</Text> to
+              start tracking
+            </Text>
+
+            <View style={styles.emptyFooter}>
+              <MaterialIcons name="lock-outline" size={16} color="#666" />
+              <Text style={styles.emptyHint}>
+                Your data is encrypted and private.
+              </Text>
+            </View>
+          </View>
+        }
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  listContainer: {
+    paddingBottom: 20,
+  },
+
   container: { flex: 1, backgroundColor: '#f8f9fa', padding: 16 },
 
   // Toggle buttons
@@ -355,7 +446,7 @@ const styles = StyleSheet.create({
   prevItemInput: {
     marginBottom: 0,
     paddingHorizontal: 8,
-    minWidth : '48%',
+    minWidth: '48%',
   },
 
   // Add Item Form
@@ -412,21 +503,119 @@ const styles = StyleSheet.create({
   // List
   listItem: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     backgroundColor: '#ffffff',
     borderRadius: 12,
     marginBottom: 10,
     elevation: 3,
     borderLeftWidth: 4,
     borderLeftColor: '#227b22',
+    minHeight: 56,
   },
-  itemName: { fontWeight: 'bold', fontSize: 16, color: '#1a1a1a', flex: 1 },
+  itemInfo: {
+    flexDirection: 'column',
+    flex: 1,
+    marginRight: 12,
+  },
+  itemName: {
+    fontWeight: 'bold',
+    fontSize: 16,
+    color: '#1a1a1a',
+    flex: 1,
+    marginRight: 12,
+  },
   itemDetail: {
     color: '#227b22',
     fontWeight: '600',
+    fontSize: 15,
     flex: 2,
     textAlign: 'right',
+    marginRight: 12,
   },
-  plus: { color: '#227b22', fontWeight: 'bold', fontSize: 24 },
+  plus: {
+    color: '#227b22',
+    fontWeight: 'bold',
+    fontSize: 22,
+    lineHeight: 26,
+  },
+  plusButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#e8f5e8',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+  },
+
+  rowBack: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingRight: 20,
+    borderRadius: 12,
+    marginBottom: 10,
+    padding: 2,
+  },
+
+  deleteBtn: {
+    backgroundColor: '#d32f2f',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 75,
+    height: '100%',
+    borderRadius: 12,
+  },
+
+  deleteText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    paddingVertical: 80,
+  },
+
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1a1a1a',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+
+  emptySubtitle: {
+    fontSize: 16,
+    color: '#555',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+  },
+
+  highlight: {
+    color: '#227b22',
+    fontWeight: 'bold',
+  },
+
+  emptyFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 20,
+  },
+
+  emptyHint: {
+    fontSize: 13,
+    color: '#888',
+    marginLeft: 6,
+    fontStyle: 'italic',
+  },
 });

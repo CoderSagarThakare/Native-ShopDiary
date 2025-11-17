@@ -1,5 +1,9 @@
-// server/controllers/entryController.js
+// server/controllers/entry-controller.js
 import {Entry} from  "../models/entry-model.js";
+import {
+  deleteEntryService,
+  getTodayEntriesService,
+} from '../services/entry-service.js';
 
 export const addEntry = async (req, res) => {
   try {
@@ -16,10 +20,6 @@ export const addEntry = async (req, res) => {
       unit,
     });
 
-    console.log("hello")
-
-   console.log(await entry.save());
-   
     res.status(201).json(entry);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -37,5 +37,40 @@ export const getEntries = async (req, res) => {
     res.json(entries);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+};
+
+export const deleteEntry = async (req, res) => {
+   
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    console.log({ id, userId });
+
+    const result = await deleteEntryService(id, userId);
+
+    res.status(200).json({
+      message: 'Entry deleted successfully',
+      data: result,
+    });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      message: error.message || 'Failed to delete entry',
+    });
+  }
+};
+
+export const getTodayEntries = async (req, res) => {
+  try {
+    const { type } = req.query;
+    const userId = req.user.id;
+
+    const entries = await getTodayEntriesService(userId, type);
+
+    res.status(200).json(entries);
+  } catch (error) {
+    console.error('Error in getTodayEntries controller:', error);
+    res.status(500).json({ message: "Failed to fetch today's entries" });
   }
 };

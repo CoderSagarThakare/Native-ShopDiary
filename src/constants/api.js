@@ -4,6 +4,7 @@ const API = {
   },
   ENTRY : {
     ENTRY: '/entries',
+    GET_TODAYS: '/entries/today',
   },
   AUTH : {
     REGISTER_SHOP: '/auth/register',
