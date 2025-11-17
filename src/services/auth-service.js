@@ -35,6 +35,7 @@ export const registerShop = async (shopName, email, password) => {
 
 export const loginShop = async (email, password) => {
   try {
+    console.log("hello");
     const res = await api.post('/auth/login', { email, password });
     await EncryptedStorage.setItem('user_token', res.data.token);
     return res.data;

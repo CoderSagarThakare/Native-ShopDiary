@@ -1,4 +1,4 @@
-// src/screens/add-screen.js
+// src/screens/add-screen.js (UPDATED)
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -8,94 +8,69 @@ import {
   FlatList,
   StyleSheet,
   Alert,
+  Modal,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import EncryptedStorage from 'react-native-encrypted-storage';
 import { useDiaryStore } from '../store/diary-store';
 import api from '../services/api-service';
-
-const COMMON_ITEMS = [
-  { label: 'Milk', value: 'milk', unit: 'L', price: 50 },
-  { label: 'Biscuits', value: 'biscuits', unit: 'pkt', price: 30 },
-  { label: 'Tea Leaves', value: 'tea', unit: 'kg', price: 300 },
-  { label: 'Sugar', value: 'sugar', unit: 'kg', price: 45 },
-  { label: 'Cigarettes', value: 'cigarettes', unit: 'pkt', price: 120 },
-];
+import API from '../constants/api.js';
 
 export default function AddScreen() {
-  const [type, setType] = useState('buy'); // 'buy' or 'sale'
+  const [type, setType] = useState('buy');
   const [item, setItem] = useState('');
   const [price, setPrice] = useState('');
   const [qty, setQty] = useState(1);
   const [entries, setEntries] = useState([]);
-  const { addToQueue } = useDiaryStore();
+  const [userItems, setUserItems] = useState([]);
+  // const [showAddItem, setShowAddItem] = useState(false);
+  const [newItemName, setNewItemName] = useState('');
+  const [newItemUnit, setNewItemUnit] = useState('');
+  const [defaultPrice, setDefaultPrice] = useState('');
 
-  // Load from encrypted storage
+  // Load entries + user items
   useEffect(() => {
     loadEntries();
+    loadUserItems();
   }, [type]);
 
   const loadEntries = async () => {
+    const key = type === 'buy' ? 'TODAY_BUYS' : 'TODAY_SALES';
+    const data = await EncryptedStorage.getItem(key);
+    setEntries(data ? JSON.parse(data) : []);
+  };
+
+  const loadUserItems = async () => {
     try {
-      const key = type === 'buy' ? 'TODAY_BUYS' : 'TODAY_SALES';
-      const data = await EncryptedStorage.getItem(key);
-      setEntries(data ? JSON.parse(data) : []);
-    } catch (e) {
-      console.log('Load failed', e);
+      const res = await api.get(API.ITEM.GET_ITEMS_LIST);
+      setUserItems(res.data);
+    } catch (err) {
+      console.log('Failed to load items');
     }
   };
 
   const saveEntries = async newEntries => {
-    try {
-      const key = type === 'buy' ? 'TODAY_BUYS' : 'TODAY_SALES';
-      await EncryptedStorage.setItem(key, JSON.stringify(newEntries));
-      setEntries(newEntries);
-    } catch (e) {
-      console.log('Local save failed', e);
-    }
-  };
-
-  useEffect(() => {
-    loadFromBackend();
-  }, [type]);
-
-  const loadFromBackend = async () => {
-    try {
-      const response = await api.get('/entries', {
-        params: { type, date: new Date().toISOString().split('T')[0] },
-      });
-      setEntries(response.data);
-    } catch (error) {
-      // Fallback to local
-      loadEntries();
-    }
+    const key = type === 'buy' ? 'TODAY_BUYS' : 'TODAY_SALES';
+    await EncryptedStorage.setItem(key, JSON.stringify(newEntries));
+    setEntries(newEntries);
   };
 
   const addOrUpdateEntry = async () => {
-    if (!item || !price || qty <= 0) {
-      Alert.alert('Error', 'Please fill all fields');
-      return;
+    if (!item || !price || !qty || parseFloat(qty) <= 0) {
+      return Alert.alert('Error', 'Fill all fields');
     }
 
     const priceNum = parseFloat(price);
-    const total = priceNum * qty;
+    const qtyNum = parseFloat(qty);
+    const total = priceNum * qtyNum;
+    const unit = getUnit(item);
 
-    const entryData = {
-      item,
-      price: priceNum,
-      qty,
-      total,
-      unit: getUnit(item),
-      type, // 'buy' or 'sale'
-    };
+    const entryData = { item, price: priceNum, qty, total, unit, type };
 
     try {
-      // 1. SEND TO BACKEND
-      const response = await api.post('/entries', entryData);
-      console.log('API Response:', response.data);
-      const savedEntry = response.data;
+      const res = await api.post(API.ENTRY.ENTRY, entryData);
+      const saved = res.data;
 
-      // 2. UPDATE LOCAL STATE
       const existing = entries.find(e => e.item === item);
       let updated;
 
@@ -106,35 +81,59 @@ export default function AddScreen() {
             : e,
         );
       } else {
-        updated = [...entries, { ...savedEntry, id: savedEntry._id }];
+        updated = [...entries, { ...saved, id: saved._id }];
       }
 
-      // 3. SAVE LOCALLY
       await saveEntries(updated);
       resetForm();
-
       Alert.alert('Success', `${item} saved!`);
-    } catch (error) {
-      console.log('API Error:', error.message);
-      Alert.alert(
-        'Failed',
-        error.message.includes('internet')
-          ? 'No internet. Please check connection and try again.'
-          : 'Server error. Try again later.',
-        [{ text: 'Retry', onPress: addOrUpdateEntry }],
-      );
+    } catch (err) {
+      console.log('Error while save entry', err);
     }
   };
 
-  const incrementQty = id => {
-    const updated = entries.map(e =>
-      e.id === id ? { ...e, qty: e.qty + 1, total: e.total + e.price } : e,
+  const addNewItem = async () => {
+
+    if (!newItemName || !newItemUnit || !defaultPrice){
+      return Alert.alert('Error', 'All fields are mandatory');
+    }
+
+    const cleanedName = newItemName.trim().toLowerCase();
+
+    const alreadyExists = userItems.some(
+      item => item.name.toLowerCase() === cleanedName,
     );
-    saveEntries(updated);
+
+    if (alreadyExists) {
+      return Alert.alert(
+        'Already Added',
+        `"${newItemName}" is already in your items.`,
+      );
+    }
+
+    try {
+      const res = await api.post(API.ITEM.GET_ITEMS_LIST, {
+        name: newItemName,
+        unit: newItemUnit,
+        defaultPrice: parseFloat(defaultPrice) || 0,
+      });
+
+      setUserItems([...userItems, res.data]);
+      setItem(newItemName);
+      // setShowAddItem(false);
+      setNewItemName('');
+      setNewItemUnit('');
+      setDefaultPrice('')
+      Alert.alert('Success', `${newItemName} added to your items!`);
+    } catch (err) {
+      Alert.alert('Failed', 'Try again');
+    }
   };
 
-  const getUnit = itemName => {
-    const found = COMMON_ITEMS.find(i => i.label === itemName);
+  const getUnit = name => {
+    const found = [...userItems].find(
+      i => i.label === name || i.name === name,
+    );
     return found?.unit || 'unit';
   };
 
@@ -144,10 +143,11 @@ export default function AddScreen() {
     setQty(1);
   };
 
-  const totalAmount = entries.reduce((sum, e) => sum + e.total, 0);
+  const allItems = [...userItems.map(i => ({ label: i.name, value: i.name }))];
 
   return (
     <View style={styles.container}>
+      {/* Toggle */}
       <View style={styles.toggle}>
         <TouchableOpacity
           style={[styles.tab, type === 'buy' && styles.activeTab]}
@@ -163,58 +163,122 @@ export default function AddScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Form */}
       <View style={styles.form}>
-        {/* PICKER */}
         <View style={styles.picker}>
           <Picker
             selectedValue={item}
-            onValueChange={setItem}
-            style={{ color: '#333' }}
-            dropdownIconColor="#227b22"
+            onValueChange={value => {
+              setItem(value);
+              if (value && value !== 'ADD_NEW') {
+                const found = [...userItems].find(
+                  i => (i.label || i.name) === value,
+                );
+                if (found && found.defaultPrice > 0) {
+                  setPrice(found.defaultPrice.toString());
+                } else {
+                  setPrice('');
+                }
+                setQty('1');
+              }
+            }}
+            style={{ color: '#333' , minWidth: '100%'}}
           >
-            <Picker.Item label="Select or type item..." value="" />
-            {COMMON_ITEMS.map(i => (
-              <Picker.Item key={i.value} label={i.label} value={i.label} />
+            <Picker.Item label="Select item..." value="" />
+            <Picker.Item label="+ Add New Item" value="ADD_NEW" />
+            {allItems.map((i, idx) => (
+              <Picker.Item key={idx} label={i.label} value={i.label} />
             ))}
           </Picker>
         </View>
 
-        {/* PRICE + QTY ROW */}
-        <View style={styles.row}>
-          <TextInput
-            style={styles.input}
-            placeholder="Price per unit (₹)"
-            placeholderTextColor="#999"
-            value={price}
-            onChangeText={setPrice}
-            keyboardType="numeric"
-          />
-
-          <View style={styles.qtyRow}>
-            <TouchableOpacity onPress={() => setQty(Math.max(1, qty - 1))}>
-              <Text style={styles.qtyBtn}>−</Text>
-            </TouchableOpacity>
-            <Text style={styles.qty}>{qty}</Text>
-            <TouchableOpacity onPress={() => setQty(qty + 1)}>
-              <Text style={styles.qtyBtn}>+</Text>
+        {item === 'ADD_NEW' && (
+          <View style={styles.addItemForm}>
+            <TextInput
+              placeholder="Item name"
+              value={newItemName}
+              onChangeText={setNewItemName}
+              style={styles.input}
+              placeholderTextColor="#333"
+            />
+            <TextInput
+              placeholder="Unit (L,pkt,kg,box,pc,dozen...)"
+              value={newItemUnit}
+              onChangeText={setNewItemUnit}
+              style={styles.input}
+              placeholderTextColor="#333"
+            />
+            <TextInput
+              placeholder="Default Price"
+              value={defaultPrice}
+              onChangeText={setDefaultPrice}
+              style={styles.input}
+              placeholderTextColor="#333"
+            />
+            <TouchableOpacity style={styles.saveBtn} onPress={addNewItem}>
+              <Text style={styles.saveText}>ADD ITEM</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        )}
 
-        {/* SAVE BUTTON */}
-        <TouchableOpacity style={styles.saveBtn} onPress={addOrUpdateEntry}>
-          <Text style={styles.saveText}>SAVE ENTRY</Text>
-        </TouchableOpacity>
+        {item && item !== 'ADD_NEW' && (
+          <>
+            {/* PRICE + QTY ROW */}
+            <View style={styles.row}>
+              <TextInput
+                style={[styles.input, styles.prevItemInput]}
+                placeholder="Price per unit"
+                value={price}
+                onChangeText={text => {
+                  // Allow decimal
+                  if (text === '' || /^\d*\.?\d*$/.test(text)) {
+                    setPrice(text);
+                  }
+                }}
+                keyboardType="decimal-pad"
+                placeholderTextColor="#999"
+              />
+
+              <View style={styles.qtyRow}>
+                <TouchableOpacity
+                  onPress={() => {
+                    const num = parseFloat(qty) || 0;
+                    setQty((num - 0.5).toFixed(2));
+                  }}
+                >
+                  <Text style={styles.qtyBtn}>−</Text>
+                </TouchableOpacity>
+                <TextInput
+                  style={[styles.qty, { textAlign: 'center' }]}
+                  value={qty}
+                  onChangeText={text => {
+                    if (text === '' || /^\d*\.?\d*$/.test(text)) {
+                      setQty(text);
+                    }
+                  }}
+                  keyboardType="decimal-pad"
+                />
+                <TouchableOpacity
+                  onPress={() => {
+                    const num = parseFloat(qty) || 0;
+                    setQty((num + 0.5).toFixed(2));
+                  }}
+                >
+                  <Text style={styles.qtyBtn}>+</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            <TouchableOpacity style={styles.saveBtn} onPress={addOrUpdateEntry}>
+              <Text style={styles.saveText}>SAVE ENTRY</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
 
-      <View style={styles.listHeader}>
-        <Text style={styles.listTitle}>TODAY'S {type.toUpperCase()}S</Text>
-        <Text style={styles.total}>Total: ₹{totalAmount}</Text>
-      </View>
-
+      {/* List */}
       <FlatList
         data={entries}
-        keyExtractor={item => item.id}
+        keyExtractor={i => i.id}
         renderItem={({ item }) => (
           <View style={styles.listItem}>
             <Text style={styles.itemName}>{item.item}</Text>
@@ -222,12 +286,20 @@ export default function AddScreen() {
               {item.qty}
               {getUnit(item.item)} × ₹{item.price} = ₹{item.total}
             </Text>
-            <TouchableOpacity onPress={() => incrementQty(item.id)}>
+            <TouchableOpacity
+              onPress={() => {
+                const updated = entries.map(e =>
+                  e.id === item.id
+                    ? { ...e, qty: e.qty + 1, total: e.total + e.price }
+                    : e,
+                );
+                saveEntries(updated);
+              }}
+            >
               <Text style={styles.plus}>+</Text>
             </TouchableOpacity>
           </View>
         )}
-        ListEmptyComponent={<Text style={styles.empty}>No entries yet</Text>}
       />
     </View>
   );
@@ -235,100 +307,126 @@ export default function AddScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8f9fa', padding: 16 },
+
+  // Toggle buttons
   toggle: { flexDirection: 'row', marginBottom: 16 },
-  tab: { flex: 1, padding: 12, alignItems: 'center', backgroundColor: '#eee' },
+  tab: {
+    flex: 1,
+    padding: 12,
+    alignItems: 'center',
+    backgroundColor: '#e0e0e0',
+  },
   activeTab: { backgroundColor: '#227b22', borderRadius: 8 },
   tabText: { color: '#fff', fontWeight: '600' },
+
+  // Form Card
   form: {
-    backgroundColor: '#ffffff', // White card
+    backgroundColor: '#ffffff',
     padding: 20,
     borderRadius: 16,
     marginBottom: 20,
-    elevation: 4,
+    elevation: 6,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
     shadowRadius: 8,
   },
+
+  // PICKER — CRITICAL FIX
   picker: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f8f9fa',
     borderRadius: 12,
     marginBottom: 16,
-    paddingHorizontal: 12,
     height: 56,
     justifyContent: 'center',
+    borderWidth: 0.5,
+    borderColor: '#227b22',
   },
+  input: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    fontSize: 16,
+    borderWidth: 0.5,
+    borderColor: '#227b22',
+    marginBottom: 12,
+  },
+  prevItemInput: {
+    marginBottom: 0,
+    paddingHorizontal: 8,
+    minWidth : '48%',
+  },
+
+  // Add Item Form
+  addItemForm: {
+    marginTop: 10,
+  },
+
+  // Qty Row
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
   },
-  input: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    marginRight: 12,
-    color: '#333',
-  },
   qtyRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#e8f5e8',
     borderRadius: 12,
-    paddingHorizontal: 8,
-    height: 50,
+    height: 56,
+    borderWidth: 0.5,
+    borderColor: '#227b22',
   },
   qtyBtn: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
     color: '#227b22',
-    width: 44,
-    textAlign: 'center',
-    paddingBottom: 4,
-  },
-  qty: {
     width: 50,
     textAlign: 'center',
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
   },
+  qty: {
+    minWidth: 40,
+    textAlign: 'center',
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1a1a1a',
+  },
+  // Buttons
   saveBtn: {
     backgroundColor: '#227b22',
-    paddingVertical: 16,
+    paddingVertical: 18,
     borderRadius: 14,
     alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 3,
+    elevation: 5,
+    marginTop: 8,
   },
   saveText: {
     color: '#ffffff',
     fontWeight: 'bold',
-    fontSize: 17,
-    letterSpacing: 0.5,
+    fontSize: 18,
+    letterSpacing: 1,
   },
-  listHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  listTitle: { fontSize: 16, fontWeight: '600' },
-  total: { fontSize: 16, fontWeight: 'bold', color: '#227b22' },
+
+  // List
   listItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    padding: 12,
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    marginBottom: 8,
-    elevation: 1,
+    padding: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    marginBottom: 10,
+    elevation: 3,
+    borderLeftWidth: 4,
+    borderLeftColor: '#227b22',
   },
-  itemName: { fontWeight: '600', flex: 1 },
-  itemDetail: { flex: 2, textAlign: 'right', marginRight: 8 },
-  plus: { color: '#227b22', fontWeight: 'bold', fontSize: 20 },
-  empty: { textAlign: 'center', color: '#999', marginTop: 20 },
+  itemName: { fontWeight: 'bold', fontSize: 16, color: '#1a1a1a', flex: 1 },
+  itemDetail: {
+    color: '#227b22',
+    fontWeight: '600',
+    flex: 2,
+    textAlign: 'right',
+  },
+  plus: { color: '#227b22', fontWeight: 'bold', fontSize: 24 },
 });

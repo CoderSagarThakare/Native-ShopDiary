@@ -2,8 +2,8 @@
 import axios from 'axios';
 import EncryptedStorage from 'react-native-encrypted-storage';
 
-
 const API_URL = 'http://192.168.31.152:5000/api';
+// const API_URL = 'http://192.168.1.117:5000/api';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -11,7 +11,7 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-api.interceptors.request.use(async (config) => {
+api.interceptors.request.use(async config => {
   const token = await EncryptedStorage.getItem('user_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -20,14 +20,14 @@ api.interceptors.request.use(async (config) => {
 });
 
 api.interceptors.response.use(
-  (response) => response,
-  (error) => {
+  response => response,
+  error => {
     if (!error.response && error.request) {
       // No internet
       throw new Error('No internet connection. Please try again.');
     }
     return Promise.reject(error);
-  }
+  },
 );
 
 export default api;

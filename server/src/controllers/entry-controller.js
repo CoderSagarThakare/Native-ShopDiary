@@ -16,7 +16,10 @@ export const addEntry = async (req, res) => {
       unit,
     });
 
-    await entry.save();
+    console.log("hello")
+
+   console.log(await entry.save());
+   
     res.status(201).json(entry);
   } catch (err) {
     res.status(400).json({ error: err.message });

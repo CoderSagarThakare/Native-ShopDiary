@@ -19,7 +19,7 @@ export default function AppNavigator({ isLoggedIn, onAuthChange }) {
       ) : (
         <Stack.Screen name="Login">
           {props => (
-            <LoginScreen {...props} onLogin={() => onAuthChange(true)} />
+            <LoginScreen {...props} onAuth={() => onAuthChange(true)} />
           )}
         </Stack.Screen>
       )}
