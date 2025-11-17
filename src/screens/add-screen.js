@@ -19,7 +19,7 @@ import { SwipeListView } from 'react-native-swipe-list-view';
 import { loadEntriesFromServer } from '../services/entry-service';
 import { loadUserItems } from '../services/item-service';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-
+import PullToRefreshWrapper from '../components/pull-to-refresh-wrapper';
 
 export default function AddScreen() {
   const [type, setType] = useState('buy');
@@ -32,11 +32,20 @@ export default function AddScreen() {
   const [newItemName, setNewItemName] = useState('');
   const [newItemUnit, setNewItemUnit] = useState('');
   const [defaultPrice, setDefaultPrice] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
   const loadEntryAndItems = async () => {
     loadEntries();
     setUserItems(await loadUserItems());
   };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadEntries(); // Your existing function
+    await loadUserItems();
+    setRefreshing(false);
+  };
+
   useEffect(() => {
     loadEntryAndItems();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -189,206 +198,213 @@ export default function AddScreen() {
   const allItems = [...userItems.map(i => ({ label: i.name, value: i.name }))];
 
   return (
-    <View style={styles.container}>
-      {/* Toggle */}
-      <View style={styles.toggle}>
-        <TouchableOpacity
-          style={[styles.tab, type === 'buy' && styles.activeTab]}
-          onPress={() => setType('buy')}
-        >
-          <Text style={styles.tabText}>Buy</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, type === 'sale' && styles.activeTab]}
-          onPress={() => setType('sale')}
-        >
-          <Text style={styles.tabText}>Sale</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Form */}
-      <View style={styles.form}>
-        <View style={styles.picker}>
-          <Picker
-            selectedValue={item}
-            onValueChange={value => {
-              setItem(value);
-              if (value && value !== 'ADD_NEW') {
-                const found = [...userItems].find(
-                  i => (i.label || i.name) === value,
-                );
-                if (found && found.defaultPrice > 0) {
-                  setPrice(found.defaultPrice.toString());
-                } else {
-                  setPrice('');
-                }
-                setQty('1');
-              }
-            }}
-            style={{ color: '#333', minWidth: '100%' }}
+    <PullToRefreshWrapper refreshing={refreshing} onRefresh={onRefresh}>
+      <View style={styles.container}>
+        {/* Toggle */}
+        <View style={styles.toggle}>
+          <TouchableOpacity
+            style={[styles.tab, type === 'buy' && styles.activeTab]}
+            onPress={() => setType('buy')}
           >
-            <Picker.Item label="Select item..." value="" />
-            <Picker.Item label="+ Add New Item" value="ADD_NEW" />
-            {allItems.map((i, idx) => (
-              <Picker.Item key={idx} label={i.label} value={i.label} />
-            ))}
-          </Picker>
+            <Text style={styles.tabText}>Buy</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, type === 'sale' && styles.activeTab]}
+            onPress={() => setType('sale')}
+          >
+            <Text style={styles.tabText}>Sale</Text>
+          </TouchableOpacity>
         </View>
 
-        {item === 'ADD_NEW' && (
-          <View style={styles.addItemForm}>
-            <TextInput
-              placeholder="Item name"
-              value={newItemName}
-              onChangeText={setNewItemName}
-              style={styles.input}
-              placeholderTextColor="#333"
-            />
-            <TextInput
-              placeholder="Unit (L,pkt,kg,box,pc,dozen...)"
-              value={newItemUnit}
-              onChangeText={setNewItemUnit}
-              style={styles.input}
-              placeholderTextColor="#333"
-            />
-            <TextInput
-              placeholder="Default Price"
-              value={defaultPrice}
-              onChangeText={setDefaultPrice}
-              style={styles.input}
-              placeholderTextColor="#333"
-            />
-            <TouchableOpacity style={styles.saveBtn} onPress={addNewItem}>
-              <Text style={styles.saveText}>ADD ITEM</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {item && item !== 'ADD_NEW' && (
-          <>
-            {/* PRICE + QTY ROW */}
-            <View style={styles.row}>
-              <TextInput
-                style={[styles.input, styles.prevItemInput]}
-                placeholder="Price per unit"
-                value={price}
-                onChangeText={text => {
-                  // Allow decimal
-                  if (text === '' || /^\d*\.?\d*$/.test(text)) {
-                    setPrice(text);
+        {/* Form */}
+        <View style={styles.form}>
+          <View style={styles.picker}>
+            <Picker
+              selectedValue={item}
+              onValueChange={value => {
+                setItem(value);
+                if (value && value !== 'ADD_NEW') {
+                  const found = [...userItems].find(
+                    i => (i.label || i.name) === value,
+                  );
+                  if (found && found.defaultPrice > 0) {
+                    setPrice(found.defaultPrice.toString());
+                  } else {
+                    setPrice('');
                   }
-                }}
-                keyboardType="decimal-pad"
-                placeholderTextColor="#999"
-              />
+                  setQty('1');
+                }
+              }}
+              style={{ color: '#333', minWidth: '100%' }}
+            >
+              <Picker.Item label="Select item..." value="" />
+              <Picker.Item label="+ Add New Item" value="ADD_NEW" />
+              {allItems.map((i, idx) => (
+                <Picker.Item key={idx} label={i.label} value={i.label} />
+              ))}
+            </Picker>
+          </View>
 
-              <View style={styles.qtyRow}>
-                <TouchableOpacity
-                  onPress={() => {
-                    const num = parseFloat(qty) || 0;
-                    setQty((num - 0.5).toFixed(2));
-                  }}
-                >
-                  <Text style={styles.qtyBtn}>−</Text>
-                </TouchableOpacity>
+          {item === 'ADD_NEW' && (
+            <View style={styles.addItemForm}>
+              <TextInput
+                placeholder="Item name"
+                value={newItemName}
+                onChangeText={setNewItemName}
+                style={styles.input}
+                placeholderTextColor="#333"
+              />
+              <TextInput
+                placeholder="Unit (L,pkt,kg,box,pc,dozen...)"
+                value={newItemUnit}
+                onChangeText={setNewItemUnit}
+                style={styles.input}
+                placeholderTextColor="#333"
+              />
+              <TextInput
+                placeholder="Default Price"
+                value={defaultPrice}
+                onChangeText={setDefaultPrice}
+                style={styles.input}
+                placeholderTextColor="#333"
+              />
+              <TouchableOpacity style={styles.saveBtn} onPress={addNewItem}>
+                <Text style={styles.saveText}>ADD ITEM</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {item && item !== 'ADD_NEW' && (
+            <>
+              {/* PRICE + QTY ROW */}
+              <View style={styles.row}>
                 <TextInput
-                  style={[styles.qty, { textAlign: 'center' }]}
-                  value={qty}
+                  style={[styles.input, styles.prevItemInput]}
+                  placeholder="Price per unit"
+                  value={price}
                   onChangeText={text => {
+                    // Allow decimal
                     if (text === '' || /^\d*\.?\d*$/.test(text)) {
-                      setQty(text);
+                      setPrice(text);
                     }
                   }}
                   keyboardType="decimal-pad"
+                  placeholderTextColor="#999"
                 />
-                <TouchableOpacity
-                  onPress={() => {
-                    const num = parseFloat(qty) || 0;
-                    setQty((num + 0.5).toFixed(2));
-                  }}
-                >
-                  <Text style={styles.qtyBtn}>+</Text>
-                </TouchableOpacity>
+
+                <View style={styles.qtyRow}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      const num = parseFloat(qty) || 0;
+                      setQty((num - 0.5).toFixed(2));
+                    }}
+                  >
+                    <Text style={styles.qtyBtn}>−</Text>
+                  </TouchableOpacity>
+                  <TextInput
+                    style={[styles.qty, { textAlign: 'center' }]}
+                    value={qty}
+                    onChangeText={text => {
+                      if (text === '' || /^\d*\.?\d*$/.test(text)) {
+                        setQty(text);
+                      }
+                    }}
+                    keyboardType="decimal-pad"
+                  />
+                  <TouchableOpacity
+                    onPress={() => {
+                      const num = parseFloat(qty) || 0;
+                      setQty((num + 0.5).toFixed(2));
+                    }}
+                  >
+                    <Text style={styles.qtyBtn}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.saveBtn}
+                onPress={addOrUpdateEntry}
+              >
+                <Text style={styles.saveText}>SAVE ENTRY</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+
+        {/* List */}
+        <SwipeListView
+          data={entries}
+          renderItem={({ item }) => (
+            <View style={styles.listItem}>
+              <View style={styles.itemInfo}>
+                <Text style={styles.itemName}>{item.item}</Text>
+                <Text style={styles.itemDetail}>
+                  {item.qty}
+                  {getUnit(item.item)} × ₹{item.price} = ₹{item.total}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.plusButton}
+                onPress={() => {
+                  const updated = entries.map(e =>
+                    e.id === item.id
+                      ? { ...e, qty: e.qty + 1, total: e.total + e.price }
+                      : e,
+                  );
+                  saveEntries(updated);
+                }}
+              >
+                <Text style={styles.plus}>+</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          renderHiddenItem={({ item }) => (
+            <View style={styles.rowBack}>
+              <TouchableOpacity
+                style={styles.deleteBtn}
+                onPress={() => deleteEntry(item._id)}
+              >
+                <Text style={styles.deleteText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          rightOpenValue={-75}
+          disableRightSwipe={true}
+          keyExtractor={item => item._id}
+          contentContainerStyle={styles.listContainer}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              {/* Real basket / shopping bag icon */}
+              <MaterialIcons
+                name={type === 'buy' ? 'shopping-basket' : 'point-of-sale'}
+                size={90}
+                color="#dc7272ff"
+                style={{ marginBottom: 24, opacity: 0.8 }}
+              />
+
+              <Text style={styles.emptyTitle}>
+                {type === 'buy'
+                  ? 'No purchases today'
+                  : 'No sales recorded yet'}
+              </Text>
+
+              <Text style={styles.emptySubtitle}>
+                select item & <Text style={styles.highlight}>SAVE ENTRY</Text>{' '}
+                to start tracking
+              </Text>
+
+              <View style={styles.emptyFooter}>
+                <MaterialIcons name="lock-outline" size={16} color="#666" />
+                <Text style={styles.emptyHint}>
+                  Your data is encrypted and private.
+                </Text>
               </View>
             </View>
-            <TouchableOpacity style={styles.saveBtn} onPress={addOrUpdateEntry}>
-              <Text style={styles.saveText}>SAVE ENTRY</Text>
-            </TouchableOpacity>
-          </>
-        )}
+          }
+        />
       </View>
-
-      {/* List */}
-      <SwipeListView
-        data={entries}
-        renderItem={({ item }) => (
-          <View style={styles.listItem}>
-            <View style={styles.itemInfo}>
-              <Text style={styles.itemName}>{item.item}</Text>
-              <Text style={styles.itemDetail}>
-                {item.qty}
-                {getUnit(item.item)} × ₹{item.price} = ₹{item.total}
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={styles.plusButton}
-              onPress={() => {
-                const updated = entries.map(e =>
-                  e.id === item.id
-                    ? { ...e, qty: e.qty + 1, total: e.total + e.price }
-                    : e,
-                );
-                saveEntries(updated);
-              }}
-            >
-              <Text style={styles.plus}>+</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        renderHiddenItem={({ item }) => (
-          <View style={styles.rowBack}>
-            <TouchableOpacity
-              style={styles.deleteBtn}
-              onPress={() => deleteEntry(item._id)}
-            >
-              <Text style={styles.deleteText}>Delete</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        rightOpenValue={-75}
-        disableRightSwipe={true}
-        keyExtractor={item => item._id}
-        contentContainerStyle={styles.listContainer}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            {/* Real basket / shopping bag icon */}
-            <MaterialIcons
-              name={type === 'buy' ? 'shopping-basket' : 'point-of-sale'}
-              size={90}
-              color="#dc7272ff"
-              style={{ marginBottom: 24, opacity: 0.8 }}
-            />
-
-            <Text style={styles.emptyTitle}>
-              {type === 'buy' ? 'No purchases today' : 'No sales recorded yet'}
-            </Text>
-
-            <Text style={styles.emptySubtitle}>
-              select item & <Text style={styles.highlight}>SAVE ENTRY</Text> to
-              start tracking
-            </Text>
-
-            <View style={styles.emptyFooter}>
-              <MaterialIcons name="lock-outline" size={16} color="#666" />
-              <Text style={styles.emptyHint}>
-                Your data is encrypted and private.
-              </Text>
-            </View>
-          </View>
-        }
-      />
-    </View>
+    </PullToRefreshWrapper>
   );
 }
 
